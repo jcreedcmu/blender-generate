@@ -119,49 +119,33 @@ def tile():
      if face.normal[0] == 0 and face.normal[1] == 0 and face.normal[2] > 0:
         top_face = face
 
-  top_face_vertex_indices = [cube.data.vertices[v].index for v in top_face.vertices]
-  print("Top Face Vertex Indices", top_face_vertex_indices)
-  cube_vertices = [cube.data.vertices[v] for v in top_face.vertices]
-  print("Cube Vertices:", [v.co for v in cube_vertices])
-  orig_vertex_normals = [[cube.data.vertices[v].normal[i] for i in range(3)] for v in range(len(cube.data.vertices))]
-  top_face_vertex_normals = [orig_vertex_normals[v] for v in top_face.vertices]
-
-  ### print("Cube Vertex Normals:", orig_vertex_normals)
-
   cube.data.materials.clear()
   cube.data.materials.append(matTile)
 
-  # Duplicate the cube so that we can restore normals after doing some surgery to it
-  bpy.ops.object.duplicate()
-  orig_cube = bpy.context.object
 
-  # Delete the top face
-  top_face.select = True
+  # Inset and delete the top face
   cube.select_set(True)
+  top_face.select = True
   bpy.ops.object.mode_set(mode='EDIT')
+  bpy.ops.mesh.inset(thickness=0.05, depth=0)
+  bpy.ops.object.mode_set(mode='OBJECT')
+  bpy.ops.object.mode_set(mode='EDIT')
+
+  inset_scale = None
+  for face in cube.data.polygons:
+      if face.select:
+          co = cube.data.vertices[face.vertices[0]].co
+          inset_scale = co[0]
   bpy.ops.mesh.delete(type='FACE')
   bpy.ops.object.mode_set(mode='OBJECT')
-
-  def restore_normals_to(obj):
-    obj.data.use_auto_smooth = True
-    mod = obj.modifiers.new(name="DataTransfer", type='DATA_TRANSFER')
-    mod.object = orig_cube
-    mod.use_loop_data = True
-    mod.data_types_loops = {'CUSTOM_NORMAL'}
-    bpy.context.view_layer.objects.active = obj
-    bpy.ops.object.modifier_apply(modifier=mod.name)
-
-  restore_normals_to(cube)
 
   ### Make Letter
   bpy.ops.mesh.primitive_plane_add(location=(0,0,0))
   plane = bpy.context.object
-  plane.scale = (cube_vertices[0].co[0], cube_vertices[0].co[1], 1)
+  plane.scale = (inset_scale, inset_scale, 1)
   plane.location = (0,0,1)
   plane.select_set(True)
   bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-
-  restore_normals_to(plane)
 
   mod = plane.modifiers.new(name="Subdivision", type='SUBSURF')
   plane.cycles.use_adaptive_subdivision = True
