@@ -21,72 +21,62 @@ def use_gpu_render():
         print(d["name"], d["use"])
 
 use_gpu_render()
-bpy.context.scene.render.filepath = "/tmp/out.png"
+bpy.context.scene.render.filepath = "/home/jcreed/tmp/out.png"
 
-bpy.context.scene.render.resolution_x = 960
-bpy.context.scene.render.resolution_y = 540
+bpy.context.scene.render.resolution_x = 640
+bpy.context.scene.render.resolution_y = 480
 
-LAYER_HEIGHT = 0.2
+TILE_THICK = 0.2
 
-def makemat():
-    material = bpy.data.materials.new(name="MyMaterial")
-
-    # Enable 'Use nodes' for the material
+def tileMat():
+    material = bpy.data.materials.new(name="Tile")
     material.use_nodes = True
-
-    # Get the node tree of the material
     nodes = material.node_tree.nodes
-
-    # Clear default nodes
     for node in nodes:
         nodes.remove(node)
 
-    # Create a principled shader node
+    # principled bsdf node
     principled_bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
+    principled_bsdf.inputs['Base Color'].default_value =( 0.95, 0.829, 0.05, 1)
+    principled_bsdf.inputs['Roughness'].default_value = 0.5
+    principled_bsdf.inputs['Metallic'].default_value = 0.1
 
-    # Set properties of the principled shader node
-    principled_bsdf.inputs['Base Color'].default_value = (1, 1, 0.8, 1)  # RGBA color
-    principled_bsdf.inputs['Roughness'].default_value = 0.4  # Roughness value
-    principled_bsdf.inputs['Metallic'].default_value = 0.3  # Metallic value
+    # texture node
+    texImage = nodes.new(type='ShaderNodeTexImage')
+    texImage.extension = 'EXTEND'
+    bpy.ops.image.open(filepath="/home/jcreed/proj/blender-generate/W.png")
+    texImage.image = bpy.data.images.get("W.png")
 
-    # Create an output node
+    # output node
     output_node = nodes.new(type='ShaderNodeOutputMaterial')
-
-    # Link the principled shader node to the output node
     material.node_tree.links.new(principled_bsdf.outputs['BSDF'], output_node.inputs['Surface'])
+
+    material.node_tree.links.new(texImage.outputs['Color'], principled_bsdf.inputs['Base Color']);
     return material
 
-mat = makemat()
+mat = tileMat()
 
-def layer(n, s):
-    for xx in range(s):
-      for yy in range(s):
-        # instead of 0..s-1 we want to go -s/2+1/2..s/2-1/2
-        x = xx - s/2 + 1/2
-        y = yy - s/2 + 1/2
-        bpy.ops.mesh.primitive_cube_add(location=(0,0,0))
-        cube = bpy.context.object
-        cube.scale = (1/s,1/s,LAYER_HEIGHT)
-        cube.location = (2*x/s,2*y/s,3*n*LAYER_HEIGHT+LAYER_HEIGHT)
-        cube.select_set(True)
-        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+def tile():
+  bpy.ops.mesh.primitive_plane_add(location=(0,0,0))
+  plane = bpy.context.object
+  plane.scale = (1,1,TILE_THICK)
+  plane.location = (0,0,1)
+  plane.select_set(True)
+  bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
-        # mod = cube.modifiers.new(name="Subdivision", type='SUBSURF')
-        # mod.render_levels = 3  # The number of subdivisions during render time
+  # mod = plane.modifiers.new(name="Subdivision", type='SUBSURF')
+  # mod.render_levels = 3  # The number of subdivisions during render time
 
-        mod = cube.modifiers.new(name="Bevel", type='BEVEL')
-        mod.width = 0.07
-        mod.segments = 3
+  mod = plane.modifiers.new(name="Bevel", type='BEVEL')
+  mod.width = 0.07
+  mod.segments = 3
 
-        cube.data.materials.clear()
-        cube.data.materials.append(mat)
+  plane.data.materials.clear()
+  plane.data.materials.append(mat)
 
-        for poly in cube.data.polygons:
-            poly.use_smooth = True
+  for poly in plane.data.polygons:
+      poly.use_smooth = True
 
-layer(0, 1)
-layer(1, 2)
-layer(2, 4)
-layer(3, 8)
-
+tile()
 bpy.ops.render.render(animation=False, write_still=True, use_viewport=False, layer='', scene='')
+bpy.ops.wm.save_as_mainfile(filepath="/home/jcreed/tmp/debug.blend")
