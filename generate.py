@@ -119,8 +119,8 @@ def tile():
      if face.normal[0] == 0 and face.normal[1] == 0 and face.normal[2] > 0:
         top_face = face
 
-  vertices = [cube.data.vertices[v] for v in top_face.vertices]
-  print("Cube Vertices:", [v.co for v in vertices])
+  cube_vertices = [cube.data.vertices[v] for v in top_face.vertices]
+  print("Cube Vertices:", [v.co for v in cube_vertices])
   orig_vertex_normals = [cube.data.vertices[v].normal for v in top_face.vertices]
   print("Cube Vertex Normals:", orig_vertex_normals)
 
@@ -137,27 +137,30 @@ def tile():
   ### Make Letter
   bpy.ops.mesh.primitive_plane_add(location=(0,0,0))
   plane = bpy.context.object
-  plane.scale = (vertices[0].co[0], vertices[0].co[1], 1)
+  plane.scale = (cube_vertices[0].co[0], cube_vertices[0].co[1], 1)
   plane.location = (0,0,1)
   plane.select_set(True)
   bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
   _pv = [plane.data.vertices[v] for v in plane.data.polygons[0].vertices]
-  plane_vertices = [_pv[2], _pv[3], _pv[0], _pv[1]]
-  print("Plane Vertices:", [v.co for v in plane_vertices])
+  rotation = [2,3,0,1]
+  print("Plane Vertices:", [plane.data.vertices[plane.data.polygons[0].vertices[rotation[i]]].co for i in range(4)])
   # Trying to set normals with https://blenderartists.org/t/editing-normals/1233341/8
-  # so far doesn't work...
+
   plane.data.use_auto_smooth = True
-  plane.data.normals_split_custom_set_from_vertices( [(1, 0, 0) for v in plane.data.vertices] )
+  plane.data.normals_split_custom_set_from_vertices( [(1,0,i/4) for i in range(len(plane.data.vertices))] )
 
 
+  # Sometimes but not always going into edit mode seems to be necessary for the split normals to take effect?
+  # bpy.ops.object.mode_set(mode='EDIT')
+  # bpy.ops.object.mode_set(mode='OBJECT')
 
-  mod = plane.modifiers.new(name="Subdivision", type='SUBSURF')
-  plane.cycles.use_adaptive_subdivision = True
-  mod.subdivision_type = 'SIMPLE'
+  # mod = plane.modifiers.new(name="Subdivision", type='SUBSURF')
+  # plane.cycles.use_adaptive_subdivision = True
+  # mod.subdivision_type = 'SIMPLE'
 
-  plane.data.materials.clear()
-  plane.data.materials.append(matLetter)
+  # plane.data.materials.clear()
+  # plane.data.materials.append(matLetter)
 
 
 tile()
@@ -166,5 +169,5 @@ camera = bpy.context.scene.camera
 camera.location *= 0.5
 camera.location.z += 0.5
 
-bpy.ops.render.render(animation=False, write_still=True, use_viewport=False, layer='', scene='')
+# bpy.ops.render.render(animation=False, write_still=True, use_viewport=False, layer='', scene='')
 bpy.ops.wm.save_as_mainfile(filepath="/home/jcreed/tmp/debug.blend")
