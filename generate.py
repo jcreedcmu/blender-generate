@@ -131,6 +131,10 @@ def tile():
   cube.data.materials.clear()
   cube.data.materials.append(matTile)
 
+  # Duplicate the cube so that we can restore normals after doing some surgery to it
+  bpy.ops.object.duplicate()
+  orig_cube = bpy.context.object
+
   # Delete the top face
   top_face.select = True
   cube.select_set(True)
@@ -138,9 +142,16 @@ def tile():
   bpy.ops.mesh.delete(type='FACE')
   bpy.ops.object.mode_set(mode='OBJECT')
 
-  # Restore normals after deleting top face
-  cube.data.use_auto_smooth = True
-  cube.data.normals_split_custom_set_from_vertices(orig_vertex_normals)
+  def restore_normals_to(obj):
+    obj.data.use_auto_smooth = True
+    mod = obj.modifiers.new(name="DataTransfer", type='DATA_TRANSFER')
+    mod.object = orig_cube
+    mod.use_loop_data = True
+    mod.data_types_loops = {'CUSTOM_NORMAL'}
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.modifier_apply(modifier=mod.name)
+
+  restore_normals_to(cube)
 
   ### Make Letter
   bpy.ops.mesh.primitive_plane_add(location=(0,0,0))
@@ -150,26 +161,7 @@ def tile():
   plane.select_set(True)
   bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
-  mapping = [0,0,0,0]
-  for i, v in enumerate(plane.data.polygons[0].vertices):
-    mapping[v] = i
-
-  def top_face_ix_of_plane_face_ix(i):
-    return (i + 4) % 2
-  def plane_face_ix_of_plane_data_ix(i):
-    return mapping[i]
-
-  def top_face_ix_of_plane_data_ix(i):
-    return top_face_ix_of_plane_face_ix(plane_face_ix_of_plane_data_ix(i))
-
-  plane.data.use_auto_smooth = True
-  plane.data.normals_split_custom_set_from_vertices( [top_face_vertex_normals[top_face_ix_of_plane_data_ix(i)]
-                                                      for i in range(len(plane.data.vertices))] )
-
-
-  # Sometimes but not always going into edit mode seems to be necessary for the split normals to take effect?
-  # bpy.ops.object.mode_set(mode='EDIT')
-  # bpy.ops.object.mode_set(mode='OBJECT')
+  restore_normals_to(plane)
 
   mod = plane.modifiers.new(name="Subdivision", type='SUBSURF')
   plane.cycles.use_adaptive_subdivision = True
