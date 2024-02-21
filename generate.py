@@ -119,10 +119,14 @@ def tile():
      if face.normal[0] == 0 and face.normal[1] == 0 and face.normal[2] > 0:
         top_face = face
 
+  top_face_vertex_indices = [cube.data.vertices[v].index for v in top_face.vertices]
+  print("Top Face Vertex Indices", top_face_vertex_indices)
   cube_vertices = [cube.data.vertices[v] for v in top_face.vertices]
   print("Cube Vertices:", [v.co for v in cube_vertices])
-  orig_vertex_normals = [cube.data.vertices[v].normal for v in top_face.vertices]
-  print("Cube Vertex Normals:", orig_vertex_normals)
+  orig_vertex_normals = [[cube.data.vertices[v].normal[i] for i in range(3)] for v in range(len(cube.data.vertices))]
+  top_face_vertex_normals = [orig_vertex_normals[v] for v in top_face.vertices]
+
+  ### print("Cube Vertex Normals:", orig_vertex_normals)
 
   cube.data.materials.clear()
   cube.data.materials.append(matTile)
@@ -134,6 +138,10 @@ def tile():
   bpy.ops.mesh.delete(type='FACE')
   bpy.ops.object.mode_set(mode='OBJECT')
 
+  # Restore normals after deleting top face
+  cube.data.use_auto_smooth = True
+  cube.data.normals_split_custom_set_from_vertices(orig_vertex_normals)
+
   ### Make Letter
   bpy.ops.mesh.primitive_plane_add(location=(0,0,0))
   plane = bpy.context.object
@@ -142,25 +150,33 @@ def tile():
   plane.select_set(True)
   bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
-  _pv = [plane.data.vertices[v] for v in plane.data.polygons[0].vertices]
-  rotation = [2,3,0,1]
-  print("Plane Vertices:", [plane.data.vertices[plane.data.polygons[0].vertices[rotation[i]]].co for i in range(4)])
-  # Trying to set normals with https://blenderartists.org/t/editing-normals/1233341/8
+  mapping = [0,0,0,0]
+  for i, v in enumerate(plane.data.polygons[0].vertices):
+    mapping[v] = i
+
+  def top_face_ix_of_plane_face_ix(i):
+    return (i + 4) % 2
+  def plane_face_ix_of_plane_data_ix(i):
+    return mapping[i]
+
+  def top_face_ix_of_plane_data_ix(i):
+    return top_face_ix_of_plane_face_ix(plane_face_ix_of_plane_data_ix(i))
 
   plane.data.use_auto_smooth = True
-  plane.data.normals_split_custom_set_from_vertices( [(1,0,i/4) for i in range(len(plane.data.vertices))] )
+  plane.data.normals_split_custom_set_from_vertices( [top_face_vertex_normals[top_face_ix_of_plane_data_ix(i)]
+                                                      for i in range(len(plane.data.vertices))] )
 
 
   # Sometimes but not always going into edit mode seems to be necessary for the split normals to take effect?
   # bpy.ops.object.mode_set(mode='EDIT')
   # bpy.ops.object.mode_set(mode='OBJECT')
 
-  # mod = plane.modifiers.new(name="Subdivision", type='SUBSURF')
-  # plane.cycles.use_adaptive_subdivision = True
-  # mod.subdivision_type = 'SIMPLE'
+  mod = plane.modifiers.new(name="Subdivision", type='SUBSURF')
+  plane.cycles.use_adaptive_subdivision = True
+  mod.subdivision_type = 'SIMPLE'
 
-  # plane.data.materials.clear()
-  # plane.data.materials.append(matLetter)
+  plane.data.materials.clear()
+  plane.data.materials.append(matLetter)
 
 
 tile()
