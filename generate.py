@@ -1,5 +1,9 @@
 import bpy
 
+TILE_THICK = 0.2
+yellowColor = (0.95, 0.829, 0.05, 1)
+brownColor = (0.0451939, 0.00518128, 0.00802261, 1)
+
 # got this from
 # https://blender.stackexchange.com/questions/104651/selecting-gpu-with-python-script
 def use_gpu_render():
@@ -23,16 +27,15 @@ def use_gpu_render():
 use_gpu_render()
 
 bpy.context.scene.cycles.feature_set = 'EXPERIMENTAL' # for adaptive subdivision
+bpy.context.scene.cycles.dicing_rate = 0.25
 
 bpy.context.scene.render.filepath = "/home/jcreed/tmp/out.png"
 
 bpy.context.scene.render.resolution_x = 640
 bpy.context.scene.render.resolution_y = 480
 
-TILE_THICK = 0.2
-
-def tileMat():
-    material = bpy.data.materials.new(name="Tile")
+def letterMat(letterImage):
+    material = bpy.data.materials.new(name="Letter")
     material.use_nodes = True
     nodes = material.node_tree.nodes
     for node in nodes:
@@ -42,20 +45,26 @@ def tileMat():
     texImage = nodes.new(type='ShaderNodeTexImage')
     texImage.extension = 'EXTEND'
     bpy.ops.image.open(filepath="/home/jcreed/proj/blender-generate/W.png")
-    texImage.image = bpy.data.images.get("W.png")
+    texImage.image = bpy.data.images.get(letterImage)
+
+    # mix node
+    mix = nodes.new(type='ShaderNodeMix')
+    mix.data_type = 'RGBA'
+    mix.inputs['A'].default_value = yellowColor
+    mix.inputs['B'].default_value = brownColor
+    material.node_tree.links.new(texImage.outputs['Color'], mix.inputs['Factor']);
 
     # principled bsdf node
     principled_bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
-    principled_bsdf.inputs['Base Color'].default_value =( 0.95, 0.829, 0.05, 1)
     principled_bsdf.inputs['Roughness'].default_value = 0.5
     principled_bsdf.inputs['Metallic'].default_value = 0.1
-    # material.node_tree.links.new(texImage.outputs['Color'], principled_bsdf.inputs['Base Color']);
+    material.node_tree.links.new(mix.outputs['Result'], principled_bsdf.inputs['Base Color'])
 
     # displacement node
     material.cycles.displacement_method = 'DISPLACEMENT'
     displacement = nodes.new(type='ShaderNodeDisplacement')
     displacement.space = 'OBJECT'
-    displacement.inputs['Scale'].default_value = 0.1
+    displacement.inputs['Scale'].default_value = -0.07
     displacement.inputs['Midlevel'].default_value = 0
     material.node_tree.links.new(texImage.outputs['Color'], displacement.inputs['Height']);
 
@@ -66,12 +75,66 @@ def tileMat():
 
     return material
 
-mat = tileMat()
+def tileMat():
+    material = bpy.data.materials.new(name="Tile")
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    for node in nodes:
+        nodes.remove(node)
+
+    # principled bsdf node
+    principled_bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
+    principled_bsdf.inputs['Base Color'].default_value = yellowColor
+    principled_bsdf.inputs['Roughness'].default_value = 0.5
+    principled_bsdf.inputs['Metallic'].default_value = 0.1
+
+    # output node
+    output_node = nodes.new(type='ShaderNodeOutputMaterial')
+    material.node_tree.links.new(principled_bsdf.outputs['BSDF'], output_node.inputs['Surface'])
+
+    return material
+
+matLetter = letterMat("W.png")
+matTile = tileMat()
 
 def tile():
+  bpy.ops.mesh.primitive_cube_add(location=(0,0,0))
+  cube = bpy.context.object
+  cube.scale = (1,1,TILE_THICK)
+  cube.location = (0,0,1-TILE_THICK)
+  bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+
+  mod = cube.modifiers.new(name="Bevel", type='BEVEL')
+  mod.width = 0.07
+  mod.segments = 3
+
+  for poly in cube.data.polygons:
+      poly.use_smooth = True
+
+  bpy.context.view_layer.objects.active = cube
+  bpy.ops.object.modifier_apply(modifier=mod.name)
+
+  top_face = None
+  for face in cube.data.polygons:
+     if face.normal[0] == 0 and face.normal[1] == 0 and face.normal[2] > 0:
+        top_face = face
+
+  vertices = [cube.data.vertices[v].co for v in top_face.vertices]
+  print("Vertices:", vertices)
+
+  cube.data.materials.clear()
+  cube.data.materials.append(matTile)
+
+  # Delete the top face
+  top_face.select = True
+  cube.select_set(True)
+  bpy.ops.object.mode_set(mode='EDIT')
+  bpy.ops.mesh.delete(type='FACE')
+  bpy.ops.object.mode_set(mode='OBJECT')
+
   bpy.ops.mesh.primitive_plane_add(location=(0,0,0))
   plane = bpy.context.object
-  plane.scale = (1,1,TILE_THICK)
+  plane.scale = (vertices[0][0],vertices[0][1],1)
   plane.location = (0,0,1)
   plane.select_set(True)
   bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
@@ -89,10 +152,8 @@ def tile():
   # mod.segments = 3
 
   plane.data.materials.clear()
-  plane.data.materials.append(mat)
+  plane.data.materials.append(matLetter)
 
-  for poly in plane.data.polygons:
-      poly.use_smooth = True
 
 tile()
 bpy.ops.render.render(animation=False, write_still=True, use_viewport=False, layer='', scene='')
