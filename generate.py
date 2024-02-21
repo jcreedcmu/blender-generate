@@ -31,8 +31,8 @@ bpy.context.scene.cycles.dicing_rate = 0.25
 
 bpy.context.scene.render.filepath = "/home/jcreed/tmp/out.png"
 
-bpy.context.scene.render.resolution_x = 640
-bpy.context.scene.render.resolution_y = 480
+bpy.context.scene.render.resolution_x = 640*2
+bpy.context.scene.render.resolution_y = 480*2
 
 def letterMat(letterImage):
     material = bpy.data.materials.new(name="Letter")
@@ -119,8 +119,10 @@ def tile():
      if face.normal[0] == 0 and face.normal[1] == 0 and face.normal[2] > 0:
         top_face = face
 
-  vertices = [cube.data.vertices[v].co for v in top_face.vertices]
-  print("Vertices:", vertices)
+  vertices = [cube.data.vertices[v] for v in top_face.vertices]
+  print("Cube Vertices:", [v.co for v in vertices])
+  orig_vertex_normals = [cube.data.vertices[v].normal for v in top_face.vertices]
+  print("Cube Vertex Normals:", orig_vertex_normals)
 
   cube.data.materials.clear()
   cube.data.materials.append(matTile)
@@ -132,12 +134,21 @@ def tile():
   bpy.ops.mesh.delete(type='FACE')
   bpy.ops.object.mode_set(mode='OBJECT')
 
+  ### Make Letter
   bpy.ops.mesh.primitive_plane_add(location=(0,0,0))
   plane = bpy.context.object
-  plane.scale = (vertices[0][0],vertices[0][1],1)
+  plane.scale = (vertices[0].co[0], vertices[0].co[1], 1)
   plane.location = (0,0,1)
   plane.select_set(True)
   bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+
+  _pv = [plane.data.vertices[v] for v in plane.data.polygons[0].vertices]
+  plane_vertices = [_pv[2], _pv[3], _pv[0], _pv[1]]
+  print("Plane Vertices:", [v.co for v in plane_vertices])
+  # Trying to set normals with https://blenderartists.org/t/editing-normals/1233341/8
+  # so far doesn't work...
+  plane.data.use_auto_smooth = True
+  plane.data.normals_split_custom_set_from_vertices( [(1, 0, 0) for v in plane.data.vertices] )
 
 
 
@@ -145,16 +156,15 @@ def tile():
   plane.cycles.use_adaptive_subdivision = True
   mod.subdivision_type = 'SIMPLE'
 
-  # mod.render_levels = 3  # The number of subdivisions during render time
-
-  # mod = plane.modifiers.new(name="Bevel", type='BEVEL')
-  # mod.width = 0.07
-  # mod.segments = 3
-
   plane.data.materials.clear()
   plane.data.materials.append(matLetter)
 
 
 tile()
+
+camera = bpy.context.scene.camera
+camera.location *= 0.5
+camera.location.z += 0.5
+
 bpy.ops.render.render(animation=False, write_still=True, use_viewport=False, layer='', scene='')
 bpy.ops.wm.save_as_mainfile(filepath="/home/jcreed/tmp/debug.blend")
