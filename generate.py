@@ -1,3 +1,4 @@
+import os
 import bpy
 
 TILE_THICK = 0.2
@@ -34,7 +35,7 @@ bpy.context.scene.render.filepath = "/home/jcreed/tmp/out.png"
 bpy.context.scene.render.resolution_x = 640*2
 bpy.context.scene.render.resolution_y = 480*2
 
-def letterMat(letterImage):
+def letterMat(path):
     material = bpy.data.materials.new(name="Letter")
     material.use_nodes = True
     nodes = material.node_tree.nodes
@@ -44,8 +45,8 @@ def letterMat(letterImage):
     # texture node
     texImage = nodes.new(type='ShaderNodeTexImage')
     texImage.extension = 'EXTEND'
-    bpy.ops.image.open(filepath="/home/jcreed/proj/blender-generate/W.png")
-    texImage.image = bpy.data.images.get(letterImage)
+    bpy.ops.image.open(filepath=path)
+    texImage.image = bpy.data.images.get(os.path.basename(path))
 
     # mix node
     mix = nodes.new(type='ShaderNodeMix')
@@ -94,10 +95,13 @@ def tileMat():
 
     return material
 
-matLetter = letterMat("W.png")
 matTile = tileMat()
 
-def tile():
+def tile(letter):
+  path = f"{os.getcwd()}/letters/{letter}.png"
+  print(path)
+  matLetter = letterMat(path)
+
   bpy.ops.mesh.primitive_cube_add(location=(0,0,0))
   cube = bpy.context.object
   cube.scale = (1,1,TILE_THICK)
@@ -154,12 +158,22 @@ def tile():
   plane.data.materials.clear()
   plane.data.materials.append(matLetter)
 
+  # Parent
+  plane.parent = cube
+  return cube
 
-tile()
+# Make empty
+empty_obj = bpy.data.objects.new("Empty", None)
+bpy.context.scene.collection.objects.link(empty_obj)
 
-camera = bpy.context.scene.camera
-camera.location *= 0.5
-camera.location.z += 0.5
+for ix, char in enumerate("WORDLIKE"):
+    t = tile(char)
+    t.name = f"Char{char}"
+    t.location = (2.1*(ix-3.5),0,0)
+    t.parent = empty_obj
 
-# bpy.ops.render.render(animation=False, write_still=True, use_viewport=False, layer='', scene='')
+empty_obj.scale = (0.5,0.5,0.5)
+empty_obj.location = (0,0,1)
+
+bpy.ops.render.render(animation=False, write_still=True, use_viewport=False, layer='', scene='')
 bpy.ops.wm.save_as_mainfile(filepath="/home/jcreed/tmp/debug.blend")
